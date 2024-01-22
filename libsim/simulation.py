@@ -18,8 +18,11 @@ class Simulation:
                       # in seconds.
         self.ticks = 0 # The amount of updates that have happened since the start of the simulation
 
-    def invoke_timed_update(self):
+    def invoke_timed_update(self, dt: float = None):
         t1 = time.time()
+
+        if dt is not None:
+            self.dt = dt
 
         # actually perform the update
         self.update(
@@ -31,8 +34,16 @@ class Simulation:
 
         self.ticks += 1
         t2 = time.time()
-        self.dt = t2 - t1 + 0.001
+
+        # update dt if it was not provided
+        if dt is None:
+            self.dt = t2 - t1 + 0.001
         return self.dt
 
     @abstractmethod
     def update(self, world: World, dt: float): pass
+
+    def movement_pass(self):
+        for obj in self.world.objects:
+            obj.velocity.add(obj.acceleration * self.dt)
+            obj.pos.add(obj.velocity * self.dt)

@@ -18,7 +18,7 @@ class PhysicsObject:
         self.should_destroy_later = True
 
     def add_force(self, force: vec2):
-        self.acceleration.add(force / self.mass)
+        self.acceleration.add(force.div_scalar(self.mass))
 
     def set_pos(self, vec: vec2) -> 'PhysicsObject':
         self.pos = vec

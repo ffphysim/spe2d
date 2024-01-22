@@ -1,7 +1,7 @@
 from libmath import *
 from libsim.object import *
 
-CHUNK_WIDTH: float = 20 # The width and height of a chunk
+CHUNK_WIDTH: float = 100 # The width and height of a chunk
 
 class Chunk:
     """

@@ -170,3 +170,6 @@ class vec2:
 
     def __eq__(self, other):
         return self.x == other.x and self.y == other.y
+
+    def dir(self, other: 'vec2'):
+        return (other - self).normalized()

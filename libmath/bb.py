@@ -28,5 +28,18 @@ class bb2d:
     def h(self):
         return abs(self.y2 - self.y1)
 
+    def center(self) -> vec2:
+        return vec2((self.x2 + self.x1) / 2, (self.y2 + self.y1) / 2)
+
+    def contains(self, x, y):
+        return self.x1 <= x <= self.x2 and self.y1 <= y <= self.y2
+
+    def contains_vec(self, vec: vec2):
+        return self.contains(vec.x, vec.y)
+
+    def __contains__(self, item):
+        if item is vec2:
+            return self.contains(item.x, item.y)
+
     def __repr__(self):
         return "bb(" + str(self.x1) + "," + str(self.y1) + " to " + str(self.x2) + "," + str(self.y2) + ")"
