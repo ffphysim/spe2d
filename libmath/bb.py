@@ -1,4 +1,4 @@
-from vec import *
+from libmath.vec import *
 import math
 
 class bb2d:
@@ -27,3 +27,6 @@ class bb2d:
 
     def h(self):
         return abs(self.y2 - self.y1)
+
+    def __repr__(self):
+        return "bb(" + str(self.x1) + "," + str(self.y1) + " to " + str(self.x2) + "," + str(self.y2) + ")"
