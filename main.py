@@ -61,6 +61,24 @@ class CameraState:
     def to_screen_rect(self, bb: bb2d) -> pygame.Rect:
         return bb_to_rect(self.to_screen_bb(bb))
 
+    def has_x(self, x):
+        return 0 <= x <= self.w
+
+    def has_y(self, y):
+        return 0 <= y <= self.h
+
+    def has(self, vec: vec2):
+        return 0 <= vec.x <= self.w and 0 <= vec.y <= self.h
+
+    def has_rect(self, rect: pygame.Rect):
+        x2 = rect.x + rect.w
+        y2 = rect.y + rect.h
+
+        return self.has_x(rect.x) and self.has_y(rect.y) or self.has_x(x2) and self.has_y(y2)
+
+    def has_bb(self, bb: bb2d):
+        return self.has_x(bb.x1) and self.has_y(bb.y1) or self.has_x(bb.x2) and self.has_y(bb.y2)
+
 def fs(f: float):
     return str(round(f, 2))
 
@@ -86,26 +104,32 @@ def render_debug(cam: CameraState, screen: pygame.Surface, world: World, sim: Si
 
     # Render chunk lines
     for chunk in world.chunks.values():
+        bb = chunk.bb
+        rect = cam.to_screen_rect(bb)
+
+        if not cam.has_rect(rect): continue
+
         redness  = min(255, max(50, int(abs(chunk.pos.x * 10))))
         blueness = min(255, max(50, int(abs(chunk.pos.y * 10))))
-        pygame.draw.rect(screen, new_col(redness, 0, blueness), cam.to_screen_rect(chunk.bb), 1)
+        pygame.draw.rect(screen, new_col(redness, 0, blueness), rect, 1)
 
         if chunk.bb.contains(worldMX, worldMY):
-            pygame.draw.rect(screen, new_col(redness, 0, blueness, 120), cam.to_screen_rect(chunk.bb))
+            pygame.draw.rect(screen, new_col(redness, 0, blueness, 120), rect)
 
     # Render objects
     for obj in world.objects:
         instance_id = id(obj)
 
-        brightness = (instance_id % 50) + 150
-        col = new_col(brightness, brightness, brightness)
-
         bb = obj.get_absolute_bb()
         sbb = cam.to_screen_bb(bb)
         center = sbb.center()
+        # if not cam.has_bb(bb): continue
+
+        brightness = (instance_id % 200) + 55
+        col = new_col(brightness, brightness, brightness)
 
         pygame.draw.rect(screen, col, bb_to_rect(sbb), 1)
-        pygame.draw.circle(screen, col, (center.x, center.y), sbb.w() / 2, 5)
+        pygame.draw.circle(screen, col, (center.x, center.y), sbb.w() / 2, max(2, min(5, obj.mass / 100))) # mass = thick
         pygame.draw.circle(screen, col, (center.x, center.y), 2)
         render_text(screen, (center.x + 2, center.y + 2), "(" + fs(obj.pos.x) + "," + fs(obj.pos.y) + ")", font8, col)
 
@@ -205,7 +229,7 @@ def process_inputs(cam: CameraState, screen: pygame.Surface, world: World, sim: 
         if cam.lastXCtrlPressed is not None:
             obj = PhysicsObject(world)
             obj.mass = 100
-            obj.velocity = vec2(worldMX - cam.lastXCtrlPressed, worldMY - cam.lastYCtrlPressed).div_scalar(100)
+            obj.velocity = vec2(worldMX - cam.lastXCtrlPressed, worldMY - cam.lastYCtrlPressed).div_scalar(4)
             obj.pos = vec2(cam.lastXCtrlPressed, cam.lastYCtrlPressed)
             world.initialize_object(obj)
 
@@ -261,7 +285,7 @@ def run_app(argv):
     simulation: MySimulation = MySimulation(world)
 
     singularity = PhysicsObject(world)
-    singularity.mass = 10000
+    singularity.mass = 100000
     world.initialize_object(singularity)
 
     ##########################################
@@ -285,8 +309,11 @@ def run_app(argv):
             inputManager.pygame_event(event)
 
         if not cam.paused:
-            # perform simulation update
-            simulation.invoke_timed_update(dt)
+            SUBSTEPS = 10
+            udt = dt / SUBSTEPS
+            for i in range(0, SUBSTEPS):
+                # perform simulation update
+                simulation.invoke_timed_update(udt)
 
         screen.fill("black")
         surface = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
