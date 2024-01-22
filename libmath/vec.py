@@ -6,6 +6,9 @@ def o2():
 def origin2():
     return vec2(0, 0)
 
+def zero():
+    return vec2(0, 0)
+
 class vec2:
     ### A two-dimensional X, Y vector
 
@@ -43,6 +46,11 @@ class vec2:
         self.x /= other.x
         self.y /= other.y
         return self
+
+    def __iadd__(self, other): return self.add(other)
+    def __isub__(self, other): return self.sub(other)
+    def __imul__(self, other): return self.mul(other)
+    def __idiv__(self, other): return self.div(other)
 
     def __add__(self, other: 'vec2'):
         return vec2(self.x + other.x, self.y + other.y)
@@ -99,3 +107,6 @@ class vec2:
 
     def yx(self):
         return vec2(self.y, self.x)
+
+    def __repr__(self):
+        return "(" + str(self.x) + "," + str(self.y) + ")"
