@@ -117,7 +117,9 @@ class vec2:
         return dx * dx + dy * dy
 
     def normalized(self) -> 'vec2':
-        m = 1 / math.sqrt(self.x * self.x + self.y * self.y)
+        mag = self.magnitude()
+        if mag == 0: return vec2(0, 0)
+        m = 1 / mag
         self.x = self.x * m
         self.y = self.y * m
         return self

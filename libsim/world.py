@@ -1,7 +1,6 @@
 from libmath import *
 from libsim.object import *
-
-CHUNK_WIDTH: float = 100 # The width and height of a chunk
+from libsim.constants import *
 
 class Chunk:
     """
@@ -30,6 +29,7 @@ class World:
         self.objects: list[PhysicsObject] = []
         self.chunks: dict[vec2, Chunk] = {}
         self.origin_chunk: Chunk = self.create_chunk(o2())
+        self.ticks = 0
 
     def create_chunk(self, pos: vec2) -> Chunk:
         newChunk = Chunk(self, pos)
@@ -49,6 +49,12 @@ class World:
 
         return newChunk
 
+    def get_or_create_chunk(self, pos: vec2):
+        chunk: Chunk = self.chunks.get(pos)
+        if chunk is None:
+            chunk = self.create_chunk(pos)
+        return chunk
+
     def update_containing_chunk(self, obj: PhysicsObject):
         oldChunk: Chunk = obj.chunk
         pos = obj.pos
@@ -56,18 +62,37 @@ class World:
         if oldChunk is None: oldChunk = self.origin_chunk
         oldChunkPos = oldChunk.pos
 
-        # find next chunk using position advance
+        # find next center chunk using position advance
         newChunkX = math.floor(pos.x / CHUNK_WIDTH)
         newChunkY = math.floor(pos.y / CHUNK_WIDTH)
         if newChunkX != oldChunkPos.x or newChunkY != oldChunkPos.y:
-            if obj in oldChunk.objects:
-                oldChunk.objects.remove(obj)
             newChunkPos = vec2(newChunkX, newChunkY)
-            newChunk: Chunk = self.chunks.get(newChunkPos)
-            if newChunk is None:
-                newChunk = self.create_chunk(newChunkPos)
+            newChunk = self.get_or_create_chunk(newChunkPos)
             newChunk.objects.append(obj)
             obj.chunk = newChunk
+
+            # add to surrounding chunks according to the
+            # entities calculated chunk bounding box
+            expand = obj.chunk_expand_bounds
+            if False: # todo: expand is not None:
+                obj.chunks.clear()
+                exBB = bb2d(newChunkX - expand[0], newChunkY - expand[3],
+                            newChunkX + expand[1], newChunkY + expand[2])
+
+                # remove old chunks
+                for oldExChunk in obj.chunks:
+                    exPos: vec2 = oldExChunk.pos
+                    if not exBB.contains_vec(exPos):
+                        obj.chunks.discard(oldExChunk)
+                        if obj in oldExChunk.objects:
+                            oldExChunk.objects.remove(obj)
+
+                #
+            else:
+                if obj in oldChunk.objects:
+                    oldChunk.objects.remove(obj)
+
+            obj.chunks.add(newChunk)
 
     def initialize_object(self, obj: PhysicsObject) -> PhysicsObject:
         obj.world = self
@@ -85,9 +110,23 @@ class World:
                 chunk.objects.remove(obj)
 
     def update(self):
+        to_remove = []
+
         # update all chunks per object
         for obj in self.objects:
             self.update_containing_chunk(obj)
 
             if obj.should_destroy_later:
                 self.destroy_object(obj)
+
+        # clean up unused chunks
+        if self.ticks % 60 == 0:
+            to_remove.clear()
+            for chunk in self.chunks.values():
+                if len(chunk.objects) == 0:
+                    to_remove.append(chunk.pos)
+
+            for pos in to_remove:
+                self.chunks.pop(pos)
+
+        self.ticks += 1

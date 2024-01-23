@@ -1,0 +1,1 @@
+CHUNK_WIDTH: float = 100 # The width and height of a chunk
