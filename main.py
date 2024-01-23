@@ -32,6 +32,8 @@ class CameraState:
         self.lastXCtrlPressed = None
         self.lastYCtrlPressed = None
 
+        self.tick_dt = 0.0001
+
     def update_surface(self, screen: pygame.Surface):
         self.screen = screen
         self.w = screen.get_width()
@@ -79,7 +81,7 @@ class CameraState:
         return self.has_x(rect.x) and self.has_y(rect.y) or self.has_x(x2) and self.has_y(y2)
 
     def has_bb(self, bb: bb2d):
-        return self.has_x(bb.x1) and self.has_y(bb.y1) or self.has_x(bb.x2) and self.has_y(bb.y2)
+        return self.has_x(bb.x1) or self.has_y(bb.y1) or self.has_x(bb.x2) or self.has_y(bb.y2)
 
 def fs(f: float):
     return str(round(f, 2))
@@ -99,6 +101,8 @@ def render_text(surface: pygame.Surface, pos: tuple, s: str, font: pygame.font.F
 
 font15 = pygame.font.SysFont("Arial Black", 15)
 font8 = pygame.font.SysFont("Arial Black", 8)
+
+ALIVE_RECT = bbcentered(o2(), vecsqr(100_000))
 
 def render_debug(cam: CameraState, screen: pygame.Surface, world: World, sim: Simulation):
     worldMX = cam.wx(inputManager.mouseX)
@@ -130,7 +134,7 @@ def render_debug(cam: CameraState, screen: pygame.Surface, world: World, sim: Si
 
         bb = obj.get_absolute_bb()
         sbb = cam.to_screen_bb(bb)
-        center = sbb.center()
+        center = sbb.center().i()
 
         kineticEnergy += 0.5 * obj.mass * obj.velocity.magnitude() ** 2
 
@@ -141,10 +145,22 @@ def render_debug(cam: CameraState, screen: pygame.Surface, world: World, sim: Si
         col = new_col(brightness, brightness, brightness)
 
         pygame.draw.rect(screen, col, bb_to_rect(sbb), 1)
-        pygame.draw.circle(screen, col, (center.x, center.y), sbb.w() / 2, max(2, min(5, obj.mass / 100))) # mass = thick
+        pygame.draw.circle(screen, col, (center.x, center.y), int(sbb.w() / 2), int(max(2, min(5, obj.mass / 100)))) # mass = thick
         pygame.draw.circle(screen, col, (center.x, center.y), 2)
         render_text(screen, (center.x + 2, center.y + 2), "(" + fs(obj.pos.x) + "," + fs(obj.pos.y) + ")", font8, col)
 
+        # render velocity and acceleration
+        if False:
+            damp = 100
+            pygame.draw.line(screen, col, (center + obj.velocity.iy().normalize().mul_scalar(2)).tuple(), (center + obj.velocity.iy().mul_scalar(cam.scale_x).div_scalar(damp)).tuple(), 1)
+            col.a = 200
+            pygame.draw.line(screen, col, center.tuple(), (center + obj.acceleration.iy().mul_scalar(cam.scale_y).div_scalar(damp)).tuple(), 1)
+
+    # Render Alive Rect
+    sAliveRect = cam.to_screen_rect(ALIVE_RECT)
+    col = new_col(255, 0, 0)
+    pygame.draw.rect(screen, col, sAliveRect, 1)
+    render_text(screen, (sAliveRect.x, sAliveRect.y - 12), str(ALIVE_RECT.w()), font8, col)
 
     if cam.lastXCtrlPressed is not None:
         pygame.draw.line(screen, new_col(0, 255, 0), (cam.sx(cam.lastXCtrlPressed), cam.sy(cam.lastYCtrlPressed)),
@@ -175,6 +191,16 @@ def render_debug(cam: CameraState, screen: pygame.Surface, world: World, sim: Si
 
     if cam.paused:
         render_text(screen, (10, cam.h - 15 - 5), "Paused at " + str(sim.ticks) + " ticks", font15, new_col(255, 255, 255))
+
+def new_user_object(sim: Simulation, pos: vec2, vel: vec2):
+    obj = PhysicsObject(sim.world)
+    # obj.mass = 5.9724E24
+    obj.mass = 100000
+    obj.velocity = vel
+    obj.pos = pos
+    sim.add_object(obj)
+    obj.simulation_object.set_radius(20)
+    return obj
 
 def process_inputs(cam: CameraState, screen: pygame.Surface, world: World, sim: Simulation):
     worldMX = cam.wx(inputManager.mouseX)
@@ -241,16 +267,31 @@ def process_inputs(cam: CameraState, screen: pygame.Surface, world: World, sim: 
             cam.lastXCtrlPressed = None
             cam.lastYCtrlPressed = None
 
+    if inputManager.is_button_down(BUTTON_RIGHT):
+        if sim.ticks % 2 == 0:
+            new_user_object(sim,
+                            vec2(worldMX, worldMY),
+                            zero())
+
     if inputManager.was_button_released(BUTTON_LEFT):
         if cam.lastXCtrlPressed is not None:
-            obj = PhysicsObject(world)
-            obj.mass = 100
-            obj.velocity = vec2(worldMX - cam.lastXCtrlPressed, worldMY - cam.lastYCtrlPressed).div_scalar(4)
-            obj.pos = vec2(cam.lastXCtrlPressed, cam.lastYCtrlPressed)
-            sim.add_object(obj)
+            new_user_object(sim,
+                            vec2(cam.lastXCtrlPressed, cam.lastYCtrlPressed),
+                            vec2(worldMX - cam.lastXCtrlPressed, worldMY - cam.lastYCtrlPressed).div_scalar(5))
 
             cam.lastXCtrlPressed = None
             cam.lastYCtrlPressed = None
+
+    if inputManager.was_key_pressed(K_PERIOD):
+        sim.invoke_timed_update(cam.tick_dt)
+    if inputManager.is_key_down(K_COMMA):
+        sim.invoke_timed_update(cam.tick_dt)
+    if inputManager.is_key_down(K_UP):
+        cam.tick_dt += 0.001
+        render_text(cam.screen, (0, 0), "step dt: " + str(cam.tick_dt), font8, new_col(255, 255, 255))
+    if inputManager.is_key_down(K_DOWN):
+        cam.tick_dt -= 0.001
+        render_text(cam.screen, (0, 0), "step dt: " + str(cam.tick_dt), font8, new_col(255, 255, 255))
 
 def render_world_and_simulation(cam: CameraState, screen: pygame.Surface, world: World, sim: Simulation):
     if cam.debug:
@@ -262,14 +303,14 @@ def render_world_and_simulation(cam: CameraState, screen: pygame.Surface, world:
 # Simulation
 ##################################
 
-G = 6.6743 * 15
+G = 6.6743 * 200
 
 class MySimulationObject(SimulationObject):
     def __init__(self, obj):
         super().__init__(obj)
 
         self.radius = 0
-        self.collision_dampening = 1
+        self.collision_dampening = 0.12
 
     def set_radius(self, radius):
         self.radius = radius
@@ -288,22 +329,36 @@ class MySimulation(Simulation):
         rB = b.radius
         rd = rA + rB
         posA = a.obj.pos
-        posB = b.obj.pos
+        posB = b.obj.pos.clone()
 
         # check for collision using radius equation
         if posA.distance(posB) / 2 <= rd:
             dir = posA.dir(posB)
             point = dir.mul_scalar(rA)
-            return point, dir  # todo: find point/normal of collision
+            return point, dir, None  # todo: find point/normal of collision
 
-        return None, None
+        # check for collision in the future using radius equation
+        # posB.add(b.obj.velocity * self.dt)
+        # if posA.distance(posB) / 2 <= rd:
+        #     dir = posA.dir(posB)
+        #     point = dir.mul_scalar(rA)
+        #     dv = dir.clone().mul_scalar((rA + rB) * 4)
+        #     fixedPos = posB.add(-dv) # position of obj b so it barely touches the surface of obj a
+        #     return point, dir, fixedPos
+
+        return None, None, None
 
 
     def solve_collisions(self, a: MySimulationObject, b: MySimulationObject):
-        point, normal = self.find_collision(a, b)
+        point, normal, predictedPos = self.find_collision(a, b)
         if point is not None:
+            bObj: PhysicsObject = b.obj
+            if predictedPos is not None:
+                bObj.pos = predictedPos
+
             # apply forces of collision in the right direction
-            forceMagnitude = b.obj.mass * b.obj.velocity.magnitude() * b.collision_dampening # F = m * a
+            forceMagnitude = bObj.mass * (bObj.velocity.magnitude() * self.dt) * b.collision_dampening
+
             a.obj.add_force(-normal.clone().mul_scalar(forceMagnitude))
             b.obj.add_force( normal.clone().mul_scalar(forceMagnitude))
             a.obj.velocity = zero()
@@ -317,8 +372,11 @@ class MySimulation(Simulation):
             # accurate gravity calculation
             for objB in world.objects: self.apply_gravity(obj, objB)
 
-            if obj.pos.distance(o2()) > 100000:
+            if not ALIVE_RECT.contains_vec(obj.pos):
+                obj.acceleration.neg()
                 obj.velocity.neg()
+                if obj.pos.distance(ALIVE_RECT.center()) > ALIVE_RECT.w() * 1.5:
+                    obj.destroy_later()
 
         # solve collisions
         for obj in world.objects:
@@ -338,6 +396,21 @@ class MySimulation(Simulation):
 # Application
 ##################################
 
+def randomize_alive_rect(sim: MySimulation):
+    for i in range(0, 50):
+        x = random.randrange(ALIVE_RECT.x1, ALIVE_RECT.x2)
+        y = random.randrange(ALIVE_RECT.y1, ALIVE_RECT.y2)
+        # VELR = 3000
+        # vx = random.randrange(-VELR, VELR)
+        # vy = random.randrange(-VELR, VELR)
+        m = random.randrange(100, 200000)
+        o = PhysicsObject(world)
+        o.set_pos(vec2(x, y))
+        # o.velocity = vec2(vx, vy)
+        o.mass = m
+        sim.add_object(o)
+        o.simulation_object.set_radius(m / 10000)
+
 def run_app(argv):
 
     ##########################################
@@ -349,20 +422,12 @@ def run_app(argv):
     simulation: MySimulation = MySimulation(world)
 
     singularity = PhysicsObject(world)
-    singularity.mass = 10000
+    singularity.mass = 1988500E24
     singularity.set_bb(bb2d(-200, -200, 200, 200))
-    simulation.add_object(singularity)
-    singularity.simulation_object.set_radius(1000)
+    # simulation.add_object(singularity)
+    # singularity.simulation_object.set_radius(20000)
 
-    for i in range(0, 100):
-        x = random.randrange(-10000, 10000)
-        y = random.randrange(-10000, 10000)
-        m = random.randrange(30, 200)
-        o = PhysicsObject(world)
-        o.set_pos(vec2(x, y))
-        o.mass = m
-        simulation.add_object(o)
-        o.simulation_object.set_radius(m)
+    randomize_alive_rect(simulation)
 
     ##########################################
     # Initialization
@@ -394,6 +459,7 @@ def run_app(argv):
             for i in range(0, SUBSTEPS):
                 # perform simulation update
                 simulation.invoke_timed_update(udt)
+                pass
 
         screen.fill("black")
         surface = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)

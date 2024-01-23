@@ -9,6 +9,9 @@ def origin2():
 def zero():
     return vec2(0, 0)
 
+def vecsqr(v):
+    return vec2(v, v)
+
 class vec2:
     ### A two-dimensional X, Y vector
 
@@ -116,7 +119,7 @@ class vec2:
         dy = other.y - self.y
         return dx * dx + dy * dy
 
-    def normalized(self) -> 'vec2':
+    def normalize(self) -> 'vec2':
         mag = self.magnitude()
         if mag == 0: return vec2(0, 0)
         m = 1 / mag
@@ -124,8 +127,10 @@ class vec2:
         self.y = self.y * m
         return self
 
-    def normalize(self):
-        m = 1 / math.sqrt(self.x * self.x + self.y * self.y)
+    def normalized(self):
+        mag = math.sqrt(self.x * self.x + self.y * self.y)
+        if mag == 0: return vec2(0, 0)
+        m = 1 / mag
         return vec2(self.x * m, self.y * m)
 
     def dot(self, other: 'vec2'):
@@ -174,4 +179,13 @@ class vec2:
         return self.x == other.x and self.y == other.y
 
     def dir(self, other: 'vec2'):
-        return (other - self).normalized()
+        return (other - self).normalize()
+
+    def tuple(self):
+        return self.x, self.y
+
+    def iy(self):
+        return vec2(self.x, -self.y)
+
+    def i(self):
+        return vec2(int(self.x), int(self.y))

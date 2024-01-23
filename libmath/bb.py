@@ -1,6 +1,9 @@
 from libmath.vec import *
 import math
 
+def bbcentered(center: vec2, size: vec2):
+    return bb2d(center.x - size.x / 2, center.y - size.y / 2, center.x + size.x / 2, center.y + size.y / 2)
+
 class bb2d:
     ### Represents a 2D bounding box
 
