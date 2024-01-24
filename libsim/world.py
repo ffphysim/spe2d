@@ -109,6 +109,29 @@ class World:
             if obj in chunk.objects:
                 chunk.objects.remove(obj)
 
+    def find_surrounding_chunks(self, obj: PhysicsObject):
+        h = obj.relative_bb.h() // 16 + 2
+        w = obj.relative_bb.w() // 16 + 2
+        x = obj.pos.x // 16 - w / 2
+        y = obj.pos.y // 16 - h / 2
+        ax = 0
+        ay = 0
+        ls = []
+
+        while ax < w:
+            while ay < h:
+                cx = x + ax
+                cy = y + ay
+                cp = vec2(cx, cy)
+                chunk = self.chunks.get(cp)
+                if chunk is not None:
+                    ls.append(chunk)
+                ay += 1
+            ay = 0
+            ax += 1
+
+        return ls
+
     def update(self):
         to_remove = []
 

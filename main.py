@@ -1,3 +1,4 @@
+import math
 import random
 import sys
 
@@ -277,7 +278,7 @@ def process_inputs(cam: CameraState, screen: pygame.Surface, world: World, sim: 
         if cam.lastXCtrlPressed is not None:
             new_user_object(sim,
                             vec2(cam.lastXCtrlPressed, cam.lastYCtrlPressed),
-                            vec2(worldMX - cam.lastXCtrlPressed, worldMY - cam.lastYCtrlPressed).div_scalar(5))
+                            vec2(worldMX - cam.lastXCtrlPressed, worldMY - cam.lastYCtrlPressed).div_scalar(2.5))
 
             cam.lastXCtrlPressed = None
             cam.lastYCtrlPressed = None
@@ -317,6 +318,13 @@ class MySimulationObject(SimulationObject):
         self.obj.set_bb(bb2d(-radius * 2, -radius * 2, radius * 2, radius * 2))
 
 class MySimulation(Simulation):
+    def __init__(self, world):
+        super().__init__(world)
+
+        #### CONSTANTS ####
+        self.air_density = 1.293 * 10 ** -1
+        self.common_drag_coefficient = .5
+
     def apply_gravity(self, obj: PhysicsObject, objOther: PhysicsObject):
         d = obj.pos.distance_sqr(objOther.pos)
         if d == 0: return
@@ -364,6 +372,15 @@ class MySimulation(Simulation):
             a.obj.velocity = zero()
             b.obj.velocity = zero()
 
+    def apply_drag(self, obj: MySimulationObject):
+        # air resistance/drag
+        area = obj.radius ** 2 * math.pi
+        vel = obj.obj.velocity.magnitude()
+        magnitude = 0.5 * self.air_density * vel * vel * self.common_drag_coefficient * area
+        force = obj.obj.velocity.normalized().neg().mul_scalar(magnitude)
+
+        obj.obj.add_force(force)
+
     def update(self, world: World, dt: float):
         # apply gravity
         for obj in world.objects:
@@ -371,6 +388,8 @@ class MySimulation(Simulation):
 
             # accurate gravity calculation
             for objB in world.objects: self.apply_gravity(obj, objB)
+
+            self.apply_drag(obj.simulation_object)
 
             if not ALIVE_RECT.contains_vec(obj.pos):
                 obj.acceleration.neg()
@@ -381,9 +400,10 @@ class MySimulation(Simulation):
         # solve collisions
         for obj in world.objects:
             # for chunk in obj.chunks:
-            for objOther in world.objects:
-                if obj != objOther:
-                    self.solve_collisions(obj.simulation_object, objOther.simulation_object)
+            for chunk in world.find_surrounding_chunks(obj):
+                for objOther in chunk.objects:
+                    if obj != objOther:
+                        self.solve_collisions(obj.simulation_object, objOther.simulation_object)
 
         self.movement_pass()
 
@@ -427,7 +447,7 @@ def run_app(argv):
     # simulation.add_object(singularity)
     # singularity.simulation_object.set_radius(20000)
 
-    randomize_alive_rect(simulation)
+    # randomize_alive_rect(simulation)
 
     ##########################################
     # Initialization
@@ -454,7 +474,7 @@ def run_app(argv):
             inputManager.pygame_event(event)
 
         if not cam.paused:
-            SUBSTEPS = 1
+            SUBSTEPS = 20
             udt = dt / SUBSTEPS
             for i in range(0, SUBSTEPS):
                 # perform simulation update
